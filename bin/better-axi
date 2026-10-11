@@ -1,0 +1,256 @@
+#!/usr/bin/env node
+/**
+ * better-axi — The Modular Browser Building Blocks CLI
+ *
+ * Exposes atomic primitives for LLM agents:
+ * 1. nav        — Fast autonomous Jev action loop over CDP until goal is achieved
+ * 2. extract    — High-throughput Crawl4AI / CDP extraction (active tab or concurrent batch)
+ * 3. classify   — Fast Jev classifier (Fit / 50-50 / Bad)
+ */
+
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+import { spawn, execFileSync } from 'node:child_process';
+import { runNavigationLoop } from '../core/jev/loop.mjs';
+import { classifyItems } from '../core/jev/classifier.mjs';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const rootDir = join(__dirname, '..');
+const pythonBin = join(rootDir, '.venv/bin/python');
+
+const [subcommand, ...args] = process.argv.slice(2);
+
+function printHelp() {
+  console.log(`
+🧱 better-axi — Agentic Browser Building Blocks
+
+Usage:
+  better-axi <command> [options]
+
+Commands:
+  nav --goal "<text>" [--url <url>] [--fields '<json>'] [--timeout <sec>]
+      Run fast autonomous Jev action loop over CDP until goal is achieved.
+      Example:
+        better-axi nav --goal "Type 'backend' into search and filter 1-3 years"
+
+  extract active [--mode fit_markdown|schema|html] [--schema hh|ozon]
+      Extract clean content/structured records from the currently active browser tab.
+      Example:
+        better-axi extract active --mode fit_markdown
+        better-axi extract active --mode schema --schema hh
+
+  extract batch <url1> <url2> ...
+      Fetch full text/data from multiple URLs concurrently in the background.
+      Example:
+        better-axi extract batch https://hh.ru/vacancy/1 https://hh.ru/vacancy/2
+
+  classify --criteria "<text>" < items.json
+      Run items through Jev decision model (categorizes into Fit / 50-50 / Bad).
+      Example:
+        better-axi classify --criteria "Senior Python backend" < vacancies.json
+`);
+  process.exit(0);
+}
+
+if (!subcommand || ['--help', '-h', 'help'].includes(subcommand)) {
+  printHelp();
+}
+
+// Global environment configuration
+const port = process.env.CHROME_DEVTOOLS_AXI_PORT || '9335';
+const browserUrl = process.env.CHROME_DEVTOOLS_AXI_BROWSER_URL || `http://127.0.0.1:${port}`;
+const session = process.env.CHROME_DEVTOOLS_AXI_SESSION || 'default';
+
+function callAxi(command, commandArgs = [], options = {}) {
+  const env = {
+    ...process.env,
+    CHROME_DEVTOOLS_AXI_PORT: port,
+    CHROME_DEVTOOLS_AXI_BROWSER_URL: browserUrl,
+    CHROME_DEVTOOLS_AXI_SESSION: session,
+  };
+  try {
+    return execFileSync('npx', ['-y', 'chrome-devtools-axi', command, ...commandArgs], {
+      env,
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      timeout: options.timeout || 30000,
+    });
+  } catch (err) {
+    const stderr = err.stderr ? err.stderr.toString().trim() : '';
+    const stdout = err.stdout ? err.stdout.toString().trim() : '';
+    throw new Error(`AXI ${command} failed: ${stderr || stdout || err.message}`);
+  }
+}
+
+async function handleNav(navArgs) {
+  let goal = '';
+  let startUrl = null;
+  let fields = {};
+  let timeoutS = 60;
+
+  for (let i = 0; i < navArgs.length; i++) {
+    if (navArgs[i] === '--goal') goal = navArgs[++i];
+    else if (navArgs[i] === '--url') startUrl = navArgs[++i];
+    else if (navArgs[i] === '--fields') {
+      try { fields = JSON.parse(navArgs[++i]); } catch {}
+    }
+    else if (navArgs[i] === '--timeout') timeoutS = parseInt(navArgs[++i], 10);
+  }
+
+  if (!goal) {
+    console.error('❌ Error: --goal is required for nav');
+    process.exit(1);
+  }
+
+  // Ensure an active page is selected if browser is running
+  try {
+    const pagesOutput = callAxi('pages');
+    if (pagesOutput.includes('selected}:') && !pagesOutput.includes(',true')) {
+      const match = pagesOutput.match(/^\s*(\d+),/m);
+      if (match) {
+        callAxi('selectpage', [match[1]]);
+      }
+    }
+  } catch {
+    // If pages probe fails, nav loop open/start will handle it
+  }
+
+  const page = {
+    async open(url) {
+      return callAxi('open', [url]);
+    },
+    async snapshot() {
+      return callAxi('snapshot');
+    },
+    async click(uid) {
+      const target = uid.startsWith('@') ? uid : `@${uid}`;
+      return callAxi('click', [target]);
+    },
+    async fill(uid, val) {
+      const target = uid.startsWith('@') ? uid : `@${uid}`;
+      return callAxi('fill', [target, String(val)]);
+    },
+    async press(key) {
+      return callAxi('press', [String(key)]);
+    },
+    async eval(expr) {
+      return callAxi('eval', [String(expr)]);
+    },
+  };
+
+  try {
+    const task = { goal, start_url: startUrl, fields, timeout_s: timeoutS };
+    const res = await runNavigationLoop(page, task);
+    console.log(JSON.stringify(res, null, 2));
+  } catch (err) {
+    console.error(JSON.stringify({ status: 'error', error: err.message }, null, 2));
+    process.exit(1);
+  }
+}
+
+async function handleExtract(extractArgs) {
+  const modeArg = extractArgs[0];
+
+  if (modeArg === 'active') {
+    let mode = 'fit_markdown';
+    let schemaType = 'none';
+
+    for (let i = 1; i < extractArgs.length; i++) {
+      if (extractArgs[i] === '--mode') mode = extractArgs[++i];
+      else if (extractArgs[i] === '--schema') schemaType = extractArgs[++i];
+    }
+
+    const env = {
+      ...process.env,
+      CHROME_DEVTOOLS_AXI_PORT: port,
+      CHROME_DEVTOOLS_AXI_BROWSER_URL: browserUrl,
+      CHROME_DEVTOOLS_AXI_SESSION: session,
+    };
+
+    const proc = spawn(
+      pythonBin,
+      ['-m', 'core.extractor.bridge', 'extract_active', mode, schemaType],
+      { cwd: rootDir, stdio: 'inherit', env }
+    );
+    proc.on('close', (c) => process.exit(c ?? 0));
+
+  } else if (modeArg === 'batch') {
+    const urls = extractArgs.slice(1);
+    if (urls.length === 0) {
+      console.log('[]');
+      process.exit(0);
+    }
+
+    const env = {
+      ...process.env,
+      CHROME_DEVTOOLS_AXI_PORT: port,
+      CHROME_DEVTOOLS_AXI_BROWSER_URL: browserUrl,
+      CHROME_DEVTOOLS_AXI_SESSION: session,
+    };
+
+    const proc = spawn(
+      pythonBin,
+      ['-c', `
+import asyncio, sys, json
+from core.extractor.bridge import Crawl4AIBridge
+bridge = Crawl4AIBridge()
+urls = sys.argv[1:]
+async def run():
+    res = await bridge.crawl_batch(urls)
+    print(json.dumps(res, ensure_ascii=False, indent=2))
+asyncio.run(run())
+`, ...urls],
+      { cwd: rootDir, stdio: 'inherit', env }
+    );
+    proc.on('close', (c) => process.exit(c ?? 0));
+
+  } else {
+    console.error('Usage: better-axi extract active [--mode ...] OR better-axi extract batch <urls...>');
+    process.exit(1);
+  }
+}
+
+async function handleClassify(classifyArgs) {
+  if (process.stdin.isTTY) {
+    console.error('❌ Error: better-axi classify expects JSON array via stdin pipe.');
+    console.error('Example: better-axi classify --criteria "..." < items.json');
+    process.exit(1);
+  }
+
+  let criteria = '';
+  for (let i = 0; i < classifyArgs.length; i++) {
+    if (classifyArgs[i] === '--criteria') criteria = classifyArgs[++i];
+  }
+
+  let input = '';
+  process.stdin.on('data', (d) => { input += d; });
+  process.stdin.on('end', async () => {
+    if (!input.trim()) {
+      console.error(JSON.stringify({ status: 'error', error: 'better-axi classify expects JSON array via stdin pipe.' }, null, 2));
+      process.exit(1);
+    }
+    try {
+      const items = JSON.parse(input);
+      const res = await classifyItems(items, criteria);
+      console.log(JSON.stringify(res, null, 2));
+    } catch (e) {
+      console.error(JSON.stringify({ status: 'error', error: e.message }, null, 2));
+      process.exit(1);
+    }
+  });
+}
+
+switch (subcommand) {
+  case 'nav':
+    await handleNav(args);
+    break;
+  case 'extract':
+    await handleExtract(args);
+    break;
+  case 'classify':
+    await handleClassify(args);
+    break;
+  default:
+    console.error(`Unknown command: ${subcommand}`);
+    printHelp();
+}

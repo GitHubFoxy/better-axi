@@ -1,0 +1,59 @@
+#!/usr/bin/env node
+/**
+ * Fast Autonomous CLI for better-axi (Jev Loop + Crawl4AI Extraction)
+ */
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+import { spawn } from 'node:child_process';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const rootDir = join(__dirname, '..');
+const runnerPath = join(rootDir, 'core/workflows/runner.mjs');
+
+const args = process.argv.slice(2);
+const command = args[0];
+
+if (!command || ['--help', '-h', 'help'].includes(command)) {
+  console.log(`
+⚡ better-axi-fast — Autonomous High-Speed Browser Workflows
+
+Usage:
+  better-axi-fast <command> [arguments...]
+
+Commands:
+  buy <query> [pages]      Search marketplace (Ozon), calculate unit economics and best value
+                           Example: better-axi-fast buy "Туалетная бумага 3 слоя" 2
+
+  job <query> [exp]        Search jobs (HH.ru), filter by stack, scan for secret keywords
+                           Example: better-axi-fast job "backend" "1-3 years"
+
+  extract <url|active>     Fast content extraction (fit_markdown or schema) via Crawl4AI
+                           Example: better-axi-fast extract active
+`);
+  process.exit(0);
+}
+
+const commandMap = {
+  buy: 'ozon-buyer',
+  'ozon-buyer': 'ozon-buyer',
+  job: 'job-search',
+  'job-search': 'job-search',
+  extract: 'extract',
+};
+
+const mappedCommand = commandMap[command];
+if (!mappedCommand) {
+  console.error(`❌ Unknown fast command: "${command}". Run "better-axi-fast --help" for available commands.`);
+  process.exit(1);
+}
+
+const runnerArgs = [mappedCommand, ...args.slice(1)];
+const proc = spawn('node', [runnerPath, ...runnerArgs], {
+  cwd: rootDir,
+  stdio: 'inherit',
+  env: process.env,
+});
+
+proc.on('close', (code) => {
+  process.exit(code ?? 0);
+});

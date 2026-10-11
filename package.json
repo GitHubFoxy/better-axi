@@ -1,0 +1,21 @@
+{
+  "name": "better-axi",
+  "version": "0.1.0",
+  "description": "Unified browser automation combining AXI, Jev fast classifier, and Crawl4AI over shared CDP",
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "test:py": ".venv/bin/pytest tests/"
+  },
+  "keywords": [
+    "axi",
+    "cdp",
+    "jev",
+    "crawl4ai",
+    "automation"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  }
+}
