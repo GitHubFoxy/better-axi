@@ -19,6 +19,6 @@
     "node": ">=20"
   },
   "dependencies": {
-    "jev-core": "github:GitHubFoxy/Jev-core#ab3a7062589a3337529668fd9a85e375033098ca"
+    "jev-core": "github:GitHubFoxy/Jev-core#78de8031b3233e78bd3525070c5e1a107f1a085d"
   }
 }
