@@ -20,6 +20,8 @@ It operates over a running **Helium / Chrome** browser with Chrome DevTools Prot
 | **3. Fast Classifier** | `better-axi classify --criteria "..."` | High-throughput semantic filtering (`Fit` / `50-50` / `Bad`) using fast decision models. | Screening 50+ items at low cost before deep investigation. |
 | **4. Raw Interactive AXI** | `npx -y chrome-devtools-axi <action>` | Direct single-action execution: `open`, `snapshot`, `click <uid>`, `fill <uid>`, `press`. | Final single-click actions (e.g. clicking "Add to Cart" or "Apply") or human inspection. |
 
+For `extract active`, the extractor requires exactly one page target or an exact URL via `--url`; it fails closed on ambiguous targets. HH search parsing returns only scoped result cards and does not treat arbitrary vacancy links as results.
+
 ---
 
 ## 🛠 Composing Workflows (How to Think)

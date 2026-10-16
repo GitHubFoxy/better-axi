@@ -1,9 +1,26 @@
 from pathlib import Path
 import pytest
-from core.extractor.bridge import Crawl4AIBridge
+from core.extractor.bridge import Crawl4AIBridge, select_page_target
 from core.extractor.markdown import generate_fit_markdown
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
+
+def test_select_page_target_requires_unique_or_exact_url():
+    pages = [
+        {"id": "old", "url": "https://hh.ru/search/vacancy?text=old"},
+        {"id": "current", "url": "https://hh.ru/search/vacancy?text=current"},
+    ]
+
+    with pytest.raises(RuntimeError, match="Pass its exact URL"):
+        select_page_target(pages)
+    assert select_page_target(pages, pages[1]["url"]) == pages[1]
+    with pytest.raises(RuntimeError, match="found 0"):
+        select_page_target(pages, "https://hh.ru/search/vacancy?text=missing")
+
+def test_parse_hh_search_html_ignores_unscoped_vacancy_links():
+    bridge = Crawl4AIBridge()
+    html = "<html><body><a href='/vacancy/123'>Recommendation</a></body></html>"
+    assert bridge.parse_hh_search_html(html) == []
 
 def test_parse_hh_search_html():
     html = (FIXTURES_DIR / "hh_search_page.html").read_text(encoding="utf-8")

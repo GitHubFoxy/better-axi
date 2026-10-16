@@ -33,10 +33,11 @@ Commands:
       Example:
         better-axi nav --goal "Type 'backend' into search and filter 1-3 years"
 
-  extract active [--mode fit_markdown|schema|html] [--schema hh|ozon]
+  extract active [--mode fit_markdown|schema|html] [--schema hh|ozon] [--url <exact-page-url>]
       Extract clean content/structured records from the currently active browser tab.
+      Pass --url when the CDP browser has multiple page targets; the URL is verified.
       Example:
-        better-axi extract active --mode fit_markdown
+        better-axi extract active --mode fit_markdown --url "https://hh.ru/search/vacancy?..."
         better-axi extract active --mode schema --schema hh
 
   extract batch <url1> <url2> ...
@@ -154,10 +155,12 @@ async function handleExtract(extractArgs) {
   if (modeArg === 'active') {
     let mode = 'fit_markdown';
     let schemaType = 'none';
+    let expectedUrl = null;
 
     for (let i = 1; i < extractArgs.length; i++) {
       if (extractArgs[i] === '--mode') mode = extractArgs[++i];
       else if (extractArgs[i] === '--schema') schemaType = extractArgs[++i];
+      else if (extractArgs[i] === '--url') expectedUrl = extractArgs[++i];
     }
 
     const env = {
@@ -169,7 +172,7 @@ async function handleExtract(extractArgs) {
 
     const proc = spawn(
       pythonBin,
-      ['-m', 'core.extractor.bridge', 'extract_active', mode, schemaType],
+      ['-m', 'core.extractor.bridge', 'extract_active', mode, schemaType, ...(expectedUrl ? [expectedUrl] : [])],
       { cwd: rootDir, stdio: 'inherit', env }
     );
     proc.on('close', (c) => process.exit(c ?? 0));

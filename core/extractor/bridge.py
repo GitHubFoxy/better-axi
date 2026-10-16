@@ -35,6 +35,16 @@ except ImportError:
     CRAWL4AI_AVAILABLE = False
 
 
+def select_page_target(page_tabs: List[Dict[str, Any]], expected_url: Optional[str] = None) -> Dict[str, Any]:
+    """Choose one CDP page target, failing closed when selection is ambiguous."""
+    matches = [tab for tab in page_tabs if not expected_url or tab.get("url") == expected_url]
+    if len(matches) != 1:
+        if expected_url:
+            raise RuntimeError(f"Expected exactly one CDP page at {expected_url!r}; found {len(matches)}.")
+        raise RuntimeError(f"Expected exactly one CDP page; found {len(matches)}. Pass its exact URL with --url.")
+    return matches[0]
+
+
 class Crawl4AIBridge:
     """Bridge for Crawl4AI connecting to Helium/Chrome over shared CDP."""
 
@@ -55,15 +65,15 @@ class Crawl4AIBridge:
             verbose=False,
         )
 
-    async def get_active_tab_dom(self) -> Dict[str, Any]:
-        """Fetch active tab HTML, URL, and title directly via CDP WebSocket without navigating."""
+    async def get_active_tab_dom(self, expected_url: Optional[str] = None) -> Dict[str, Any]:
+        """Fetch one selected page by exact URL, without navigating."""
         req = urllib.request.urlopen(f"{self.cdp_url}/json", timeout=2.0)
         tabs = json.loads(req.read().decode("utf-8"))
         page_tabs = [t for t in tabs if t.get("type") == "page" and not t.get("url", "").startswith("devtools://")]
         if not page_tabs:
             raise RuntimeError(f"No active page tabs found on CDP at {self.cdp_url}")
 
-        tab = page_tabs[0]
+        tab = select_page_target(page_tabs, expected_url)
         ws_url = tab.get("webSocketDebuggerUrl")
         if not ws_url:
             raise RuntimeError("Target page tab does not have webSocketDebuggerUrl.")
@@ -94,6 +104,8 @@ class Crawl4AIBridge:
                 })
                 resp_url = await ws.receive_json()
                 url = resp_url.get("result", {}).get("result", {}).get("value", tab.get("url", ""))
+                if expected_url and url != expected_url:
+                    raise RuntimeError(f"Page URL changed during extraction: expected {expected_url!r}, got {url!r}.")
 
                 return {
                     "url": url,
@@ -101,9 +113,9 @@ class Crawl4AIBridge:
                     "html": html,
                 }
 
-    async def extract_active(self, mode: str = "fit_markdown", schema_type: Optional[str] = None) -> Any:
+    async def extract_active(self, mode: str = "fit_markdown", schema_type: Optional[str] = None, expected_url: Optional[str] = None) -> Any:
         """Extract clean markdown, structured schema, or raw HTML from active tab."""
-        dom_data = await self.get_active_tab_dom()
+        dom_data = await self.get_active_tab_dom(expected_url=expected_url)
         html = dom_data.get("html", "")
         title = dom_data.get("title", "")
         url = dom_data.get("url", "")
@@ -175,8 +187,6 @@ class Crawl4AIBridge:
         records: List[HHVacancyRecord] = []
 
         cards = soup.select("[data-qa='vacancy-serp__vacancy'], .vacancy-card--H_dp9GgL, [data-qa='serp-item__title']")
-        if not cards:
-            cards = soup.select("a[href*='/vacancy/']")
 
         seen_ids = set()
         for card in cards:
@@ -389,8 +399,9 @@ def main():
     if cmd == "extract_active":
         mode = sys.argv[2] if len(sys.argv) > 2 else "fit_markdown"
         schema_type = sys.argv[3] if len(sys.argv) > 3 and sys.argv[3] != "none" else None
+        expected_url = sys.argv[4] if len(sys.argv) > 4 else None
         try:
-            res = asyncio.run(bridge.extract_active(mode=mode, schema_type=schema_type))
+            res = asyncio.run(bridge.extract_active(mode=mode, schema_type=schema_type, expected_url=expected_url))
             if isinstance(res, (dict, list)):
                 print(json.dumps(res, ensure_ascii=False, indent=2))
             else:
