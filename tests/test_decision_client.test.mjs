@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { requestDecision, validateChoice } from '../core/jev/decision_client.mjs';
+import { requestDecision, validateChoice } from 'jev-core';
 
 test('validateChoice validates choice membership', () => {
   const criteria = { FIT: 'Good', SKIP: 'Bad' };
@@ -21,20 +21,19 @@ test('requestDecision uses mockHandler when provided', async () => {
   assert.deepEqual(res.result, mockResponse);
 });
 
-test('requestDecision throws error if no provider or keys present', async () => {
-  const originalEnv = { ...process.env };
-  delete process.env.OPENROUTER_API_KEY;
-  delete process.env.AI_GATEWAY_API_KEY;
-  delete process.env.CLOUDFLARE_API_TOKEN;
+test('requestDecision requires Jev Core client API key', async () => {
+  const originalKey = process.env.JEV_CORE_API_KEY;
+  delete process.env.JEV_CORE_API_KEY;
 
   try {
     await assert.rejects(
       async () => {
         await requestDecision({ state: {}, questions: {} });
       },
-      /No decision provider configured/
+      /JEV_CORE_API_KEY is required/
     );
   } finally {
-    Object.assign(process.env, originalEnv);
+    if (originalKey === undefined) delete process.env.JEV_CORE_API_KEY;
+    else process.env.JEV_CORE_API_KEY = originalKey;
   }
 });

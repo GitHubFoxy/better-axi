@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { classifyItems, CLASSIFICATION_CHOICES } from '../core/jev/classifier.mjs';
+import { classifyItems, CLASSIFICATION_CHOICES } from '../core/classification/classifier.mjs';
 
 test('classifyItems categorizes items into Fit / 50-50 / Bad', async () => {
   const items = [

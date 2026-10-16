@@ -1,7 +1,7 @@
 {
   "name": "better-axi",
   "version": "0.1.0",
-  "description": "Unified browser automation combining AXI, Jev fast classifier, and Crawl4AI over shared CDP",
+  "description": "Browser automation over AXI/CDP and Crawl4AI, using standalone Jev Core Decision API",
   "type": "module",
   "scripts": {
     "test": "node --test tests/*.test.mjs",
@@ -17,5 +17,8 @@
   "license": "MIT",
   "engines": {
     "node": ">=20"
+  },
+  "dependencies": {
+    "jev-core": "github:GitHubFoxy/Jev-core#ab3a7062589a3337529668fd9a85e375033098ca"
   }
 }

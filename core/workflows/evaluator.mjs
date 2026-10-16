@@ -1,5 +1,5 @@
 /**
- * Detailed Evaluator (Eval 2) and Cover Letter Generator for Jev.
+ * Vacancy-specific evaluator and cover letter generator (Better AXI workflow).
  * Performs in-depth vacancy analysis, screens for hidden employer requirements
  * (e.g., "start cover letter with LOL"), and drafts customized responses.
  */

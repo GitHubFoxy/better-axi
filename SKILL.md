@@ -58,3 +58,7 @@ export CHROME_DEVTOOLS_AXI_PORT=9336
 export CHROME_DEVTOOLS_AXI_BROWSER_URL="http://127.0.0.1:9336"
 export CHROME_DEVTOOLS_AXI_SESSION="ozon"
 ```
+
+## External Jev Core dependency
+
+For `nav` and `classify`, launch the standalone Jev Core service and set `JEV_CORE_URL` and `JEV_CORE_API_KEY`. Provider credentials stay with the server. `extract` works without Jev Core.

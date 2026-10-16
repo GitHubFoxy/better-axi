@@ -11,8 +11,8 @@
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { spawn, execFileSync } from 'node:child_process';
-import { runNavigationLoop } from '../core/jev/loop.mjs';
-import { classifyItems } from '../core/jev/classifier.mjs';
+import { runNavigationLoop } from '../core/navigation/loop.mjs';
+import { classifyItems } from '../core/classification/classifier.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = join(__dirname, '..');

@@ -4,7 +4,7 @@ import {
   detectSpecialConditions,
   evaluateDeepMatch,
   draftCoverLetter,
-} from '../core/jev/evaluator.mjs';
+} from '../core/workflows/evaluator.mjs';
 
 test('detectSpecialConditions identifies secret screening words in Russian and English', () => {
   // Russian variations

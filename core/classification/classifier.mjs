@@ -1,9 +1,9 @@
 /**
- * Fast Jev Classifier for web navigation, filtering, and job candidate match.
+ * Better AXI classification labels backed by remote Jev Core decisions.
  * Evaluates titles/snippets into Fit / 50-50 / Bad.
  */
 
-import { requestDecision, validateChoice } from './decision_client.mjs';
+import { requestDecision, validateChoice } from 'jev-core';
 
 export const CLASSIFICATION_CHOICES = {
   FIT: 'Fit: Strong match with criteria, key requirements and skills aligned.',

@@ -94,6 +94,16 @@ npm install
 uv sync
 ```
 
+### Jev Core decision service (required for `nav` and `classify`)
+
+Jev Core is now an independent REST API. `better-axi` no longer bundles decision models or provider credentials; it imports the `jev-core` ESM HTTP client. Start the [Jev Core server](https://github.com/GitHubFoxy/Jev-core) separately, then configure:
+
+```bash
+export JEV_CORE_URL=http://127.0.0.1:8787
+export JEV_CORE_API_KEY='your-shared-service-key'
+```
+
+Provider keys and model pools belong **only on the Jev Core service**, not in the Better AXI process. The `extract` commands work without Jev Core. During migration the git dependency is pinned to a Jev Core commit; switch to a semver release once published.
 ### Environment Configuration
 
 `better-axi` seamlessly attaches to any running Chrome or Helium instance with remote debugging enabled:

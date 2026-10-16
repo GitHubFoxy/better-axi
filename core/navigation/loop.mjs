@@ -1,9 +1,9 @@
 /**
- * Action & Decision Loop for Jev and AXI over CDP.
+ * AXI navigation loop using decisions from the independent Jev Core API.
  * Token-efficient accessibility snapshotting, decision making, and execution.
  */
 
-import { requestDecision, validateChoice } from './decision_client.mjs';
+import { requestDecision, validateChoice } from 'jev-core';
 
 export function parseSnapshotElements(snapshot) {
   if (!snapshot || typeof snapshot !== 'string') return [];
