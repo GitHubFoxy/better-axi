@@ -144,3 +144,33 @@ test('PAG singleton choice is selected locally, without unsupported choice quest
   });
   assert.equal(result.status, 'done');
 });
+
+
+test('sensitive input values are redacted before sending a snapshot to PAG', async () => {
+  const page = {
+    snapshot: async () => 'uid=1 textbox "Password" value="dont-send-this-secret"',
+  };
+  const result = await runNavigationLoop(page, { goal: 'Stop' }, {
+    mockHandler: async payload => {
+      const text = payload.state.page.text;
+      assert.doesNotMatch(text, /dont-send-this-secret/);
+      assert.match(text, /value="\*\*\*REDACTED\*\*\*"/);
+      return { answers: { operation: { choice: 'DONE' } } };
+    },
+  });
+  assert.equal(result.status, 'done');
+});
+
+test('PAG action questions never exceed 255 allowed choices', async () => {
+  const snapshot = Array.from({ length: 300 }, (_, i) =>
+    'uid=' + i + ' button "Button ' + i + '"'
+  ).join('\n');
+  const page = { snapshot: async () => snapshot };
+  const result = await runNavigationLoop(page, { goal: 'Stop' }, {
+    mockHandler: async payload => {
+      assert.equal(Object.keys(payload.questions.click_target.criteria).length, 255);
+      return { answers: { operation: { choice: 'DONE' } } };
+    },
+  });
+  assert.equal(result.status, 'done');
+});
