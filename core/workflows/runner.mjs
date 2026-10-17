@@ -25,8 +25,8 @@ function runPython(moduleArgs) {
 }
 
 switch (command) {
-  case 'jev-classify':
-    import('../jev/classifier.mjs').then(({ classifyItems }) => {
+  case 'classify':
+    import('../agent/classifier.mjs').then(({ classifyItems }) => {
       let input = '';
       process.stdin.on('data', (d) => { input += d; });
       process.stdin.on('end', async () => {
