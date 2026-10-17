@@ -5,7 +5,7 @@ import {
   generateActions,
   performAction,
   runNavigationLoop,
-} from '../core/jev/loop.mjs';
+} from '../core/agent/loop.mjs';
 
 test('parseSnapshotElements extracts interactive elements and attributes', () => {
   const snapshot = `
