@@ -1,17 +1,18 @@
 """
-Job Search Workflow (hh.ru) uniting AXI, Jev, and Crawl4AI.
+Job Search Workflow (hh.ru) uniting AXI, PAG-backed Decisions, and Crawl4AI.
 1. Nav: Open hh.ru, search "backend", apply experience filter "1-3 years".
 2. Extract: Extract listed vacancies into structured records via Crawl4AI.
-3. Eval 1: Jev evaluates titles/snippets into Fit / 50-50 / Bad.
+3. Eval 1: PAG-backed Decisions evaluates titles/snippets into Fit / 50-50 / Bad.
 4. Batch Deep Extract: Crawl4AI extracts full descriptions for valid vacancies.
-5. Eval 2: Jev/LLM detailed scoring, special screening check, draft response.
-6. Apply: Jev/AXI navigates to best vacancy, triggers apply, enters cover letter.
+5. Eval 2: PAG-backed Decisions/LLM detailed scoring, special screening check, draft response.
+6. Apply: PAG-backed Decisions/AXI navigates to best vacancy, triggers apply, enters cover letter.
 """
 from __future__ import annotations
 
 import asyncio
 import json
 import re
+from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 from core.extractor.bridge import Crawl4AIBridge
@@ -74,6 +75,23 @@ class JobSearchWorkflow:
             "review": [r for r in results if r["decision"] == "50-50"],
             "bad": [r for r in results if r["decision"] == "Bad"],
         }
+
+    async def classify_with_pag(self, items: List[Dict[str, Any]], criteria: str) -> Dict[str, Any]:
+        """Delegate actual workflow classification to the Node PAG-backed classifier."""
+        runner = Path(__file__).with_name("runner.mjs")
+        process = await asyncio.create_subprocess_exec(
+            "node", str(runner), "classify",
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            cwd=Path(__file__).resolve().parents[2],
+        )
+        output, errors = await process.communicate(
+            json.dumps({"items": items, "criteria": criteria}).encode("utf-8")
+        )
+        if process.returncode != 0:
+            raise RuntimeError("PAG classification failed: " + errors.decode("utf-8", errors="replace")[:500])
+        return json.loads(output)
 
     def detect_special_conditions(self, text: str) -> Dict[str, Any]:
         """Check for secret recruiter instructions like 'start cover letter with LOL'."""
@@ -150,10 +168,16 @@ class JobSearchWorkflow:
         if not vacancies:
             return {"status": "empty", "vacancies_found": 0, "message": "No vacancies found."}
 
-        # Step 3: Eval 1 (Jev Fast Filter)
+        # Step 3: Eval 1 (PAG-backed Decisions Fast Filter)
         criteria = f"Backend developer position matching {candidate['skills']} with experience 1-3 years."
         items_payload = [v.model_dump() for v in vacancies]
-        classify_res = self.classifier_fn(items_payload, criteria) if self.classifier_fn else self.default_classify(items_payload, criteria)
+        if self.classifier_fn is not None:
+            classify_res = self.classifier_fn(items_payload, criteria)
+        elif mock_search_html is not None:
+            # Offline fixture path: no real decision provider used in tests.
+            classify_res = self.default_classify(items_payload, criteria)
+        else:
+            classify_res = await self.classify_with_pag(items_payload, criteria)
 
         passed_ids = {r["id"] for r in classify_res.get("passed", [])}
         filtered_vacancies = [v for v in vacancies if v.id in passed_ids]
