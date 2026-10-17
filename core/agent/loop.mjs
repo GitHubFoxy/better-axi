@@ -122,13 +122,14 @@ export async function runNavigationLoop(page, task, options = {}) {
 
     // PAG choice IDs cannot contain colons, unlike AXI action IDs.
     function addTarget(group, actionId, label) {
+      if (Object.keys(groups[group]).length >= 255) return; // PAG permits <=255 options per question.
       const key = 'target_' + Object.keys(groups[group]).length;
       groups[group][key] = String(label).slice(0, 2000);
       groupActions[group][key] = actionId;
     }
     for (const [id, action] of Object.entries(observed)) {
       const group = action.kind === 'fill' ? 'TYPE_TEXT' : 'CLICK';
-      addTarget(group, id, action.role + ': ' + (action.label || action.uid));
+      addTarget(group, id, action.role + ' uid=' + action.uid + ': ' + (action.label || ''));
     }
 
     const controls = {
@@ -175,9 +176,10 @@ export async function runNavigationLoop(page, task, options = {}) {
       {
         state: {
           page: {
-            text: snapshot.slice(0, 12000).replace(/value="([^"]*)"/g, match =>
-              /password|secret|cvv|token|card/i.test(match) ? 'value="***REDACTED***"' : match
-            ),
+            text: snapshot.slice(0, 12000).split('\n').map(line =>
+              /password|secret|cvv|token|card/i.test(line)
+                ? line.replace(/value="[^"]*"/g, 'value="***REDACTED***"') : line
+            ).join('\n'),
           },
           recent_actions: history.slice(-6).map(h => h.choice),
         },
