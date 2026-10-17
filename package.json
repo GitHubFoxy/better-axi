@@ -1,7 +1,7 @@
 {
   "name": "better-axi",
   "version": "0.1.0",
-  "description": "Unified browser automation combining AXI, Jev fast classifier, and Crawl4AI over shared CDP",
+  "description": "Agentic browser primitives powered by PAG Decisions and Crawl4AI",
   "type": "module",
   "scripts": {
     "test": "node --test tests/*.test.mjs",
@@ -10,7 +10,8 @@
   "keywords": [
     "axi",
     "cdp",
-    "jev",
+    "pag",
+    "decisions",
     "crawl4ai",
     "automation"
   ],
