@@ -1,9 +1,9 @@
 /**
- * Action & Decision Loop for Jev and AXI over CDP.
+ * Action & Decision Loop for Better-AXI using PAG over CDP.
  * Token-efficient accessibility snapshotting, decision making, and execution.
  */
 
-import { requestDecision, validateChoice } from './decision_client.mjs';
+import { requestDecision, validateChoice } from '../pag/client.mjs';
 
 export function parseSnapshotElements(snapshot) {
   if (!snapshot || typeof snapshot !== 'string') return [];
@@ -118,15 +118,18 @@ export async function runNavigationLoop(page, task, options = {}) {
 
     const observed = generateActions(snapshot, task);
     const groups = { CLICK: {}, TYPE_TEXT: {}, EXTRA: {} };
+    const groupActions = { CLICK: {}, TYPE_TEXT: {}, EXTRA: {} };
 
-    for (const [id, a] of Object.entries(observed)) {
-      const groupKey = a.kind === 'fill' ? 'TYPE_TEXT' : 'CLICK';
-      groups[groupKey][id] = {
-        element: a.label,
-        role: a.role,
-        current_value: a.current_value,
-        ...(a.kind === 'fill' ? { desired_text: a.value } : {}),
-      };
+    // PAG choice IDs cannot contain colons, unlike AXI action IDs.
+    function addTarget(group, actionId, label) {
+      if (Object.keys(groups[group]).length >= 255) return; // PAG permits <=255 options per question.
+      const key = 'target_' + Object.keys(groups[group]).length;
+      groups[group][key] = String(label).slice(0, 2000);
+      groupActions[group][key] = actionId;
+    }
+    for (const [id, action] of Object.entries(observed)) {
+      const group = action.kind === 'fill' ? 'TYPE_TEXT' : 'CLICK';
+      addTarget(group, id, action.role + ' uid=' + action.uid + ': ' + (action.label || ''));
     }
 
     const controls = {
@@ -138,38 +141,33 @@ export async function runNavigationLoop(page, task, options = {}) {
       TAB: { kind: 'press', key: 'Tab', label: 'Move focus to next input' },
       BACK: { kind: 'back', label: 'Go back to previous page' },
     };
-
-    for (const [i, a] of (task.extra_actions ?? []).entries()) {
-      const id = `EXTRA:${i}`;
-      observed[id] = { ...a, kind: 'extra' };
-      groups.EXTRA[id] = a.label;
+    for (const [i, action] of (task.extra_actions ?? []).entries()) {
+      const id = 'EXTRA:' + i;
+      observed[id] = { ...action, kind: 'extra' };
+      addTarget('EXTRA', id, action.label || 'Custom operation ' + i);
     }
 
-    const criteria = Object.fromEntries(Object.entries(controls).map(([k, v]) => [k, v.label]));
+    const criteria = Object.fromEntries(Object.entries(controls).map(([key, value]) => [key, value.label]));
     criteria.DONE = 'Goal has been visibly achieved';
-    criteria.HANDOFF = 'Manual intervention or Pi guidance required';
-
-    if (Object.keys(groups.CLICK).length) criteria.CLICK = 'Click an observed button/link';
-    if (Object.keys(groups.TYPE_TEXT).length) criteria.TYPE_TEXT = 'Fill input field';
-    if (Object.keys(groups.EXTRA).length) criteria.EXTRA = 'Execute custom AXI operation';
-
+    criteria.HANDOFF = 'Manual intervention required';
+    for (const [group, choices] of Object.entries(groups)) {
+      if (Object.keys(choices).length) criteria[group] = 'Choose an observed ' + group + ' action';
+    }
     const questions = {
       operation: {
         type: 'choice',
         criteria,
-        instructions: {
-          goal: task.goal,
-          rules: 'Pick the single most logical next operation to make progress.',
-        },
+        instructions: 'Goal: ' + task.goal + '\nChoose the next operation based on the page state.',
       },
     };
-
-    for (const [op, targets] of Object.entries(groups)) {
-      if (Object.keys(targets).length) {
-        questions[`${op.toLowerCase()}_target`] = {
+    for (const [group, choices] of Object.entries(groups)) {
+      // PAG choice questions need at least two possible values.
+      // Resolve a single available target locally, after the operation is chosen.
+      if (Object.keys(choices).length > 1) {
+        questions[group.toLowerCase() + '_target'] = {
           type: 'choice',
-          criteria: targets,
-          instructions: { goal: task.goal, operation: op },
+          criteria: choices,
+          instructions: 'Goal: ' + task.goal + '\nChoose the best target for ' + group + '.',
         };
       }
     }
@@ -178,14 +176,12 @@ export async function runNavigationLoop(page, task, options = {}) {
       {
         state: {
           page: {
-          text: snapshot
-            .slice(0, 12000)
-            .replace(/value="([^"]*)"/g, (match) =>
-              /password|secret|cvv|token|card/i.test(match) ? 'value="***REDACTED***"' : match
-            ),
-        },
-          elements: groups,
-          recent_actions: history.slice(-6).map((h) => h.choice),
+            text: snapshot.slice(0, 12000).split('\n').map(line =>
+              /password|secret|cvv|token|card/i.test(line)
+                ? line.replace(/value="[^"]*"/g, 'value="***REDACTED***"') : line
+            ).join('\n'),
+          },
+          recent_actions: history.slice(-6).map(h => h.choice),
         },
         questions,
       },
@@ -194,8 +190,8 @@ export async function runNavigationLoop(page, task, options = {}) {
         timeoutMs: Math.max(1000, Math.floor(deadline - performance.now())),
         validateResult: (res) => {
           const op = validateChoice(res.answers?.operation, criteria);
-          if (Object.hasOwn(groups, op)) {
-            validateChoice(res.answers?.[`${op.toLowerCase()}_target`], groups[op]);
+          if (Object.hasOwn(groups, op) && Object.keys(groups[op]).length > 1) {
+            validateChoice(res.answers?.[op.toLowerCase() + '_target'], groups[op]);
           }
         },
       }
@@ -203,9 +199,13 @@ export async function runNavigationLoop(page, task, options = {}) {
 
     const res = decisionResponse.result;
     const operation = validateChoice(res.answers?.operation, criteria);
-    const choice = Object.hasOwn(groups, operation)
-      ? validateChoice(res.answers?.[`${operation.toLowerCase()}_target`], groups[operation])
-      : operation;
+    let choice = operation;
+    if (Object.hasOwn(groups, operation)) {
+      const keys = Object.keys(groups[operation]);
+      const target = keys.length === 1 ? keys[0]
+        : validateChoice(res.answers?.[operation.toLowerCase() + '_target'], groups[operation]);
+      choice = groupActions[operation][target];
+    }
 
     decisions.push({ choice, operation, provider: decisionResponse.provider });
 

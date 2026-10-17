@@ -1,6 +1,6 @@
 ---
 name: better-axi
-description: Modular agentic browser building blocks uniting AXI, Jev fast loop, and Crawl4AI over shared CDP. Use to compose any browser workflow on the fly.
+description: Modular agentic browser building blocks uniting AXI, PAG-backed fast loop, and Crawl4AI over shared CDP. Use to compose any browser workflow on the fly.
 ---
 
 # better-axi — Modular Browser Building Blocks
@@ -15,7 +15,7 @@ It operates over a running **Helium / Chrome** browser with Chrome DevTools Prot
 
 | Block | Command | What it does | When to use |
 | :--- | :--- | :--- | :--- |
-| **1. Fast Nav Loop** | `better-axi nav --goal "..."` | Runs a sub-second **Jev autonomous loop** over CDP until the goal is visibly achieved (`status: done`) or intervention is needed (`status: handoff`). | Navigating to pages, typing into search bars, applying UI filters, opening accordions. |
+| **1. Fast Nav Loop** | `better-axi nav --goal "..."` | Runs a sub-second **PAG-backed autonomous loop** over CDP until the goal is visibly achieved (`status: done`) or intervention is needed (`status: handoff`). | Navigating to pages, typing into search bars, applying UI filters, opening accordions. |
 | **2. Clean Extractor** | `better-axi extract active` / `batch` | Connects **Crawl4AI** to the browser over CDP to extract `fit_markdown` (80% noise stripped) or fetch 20 URLs in the background. | Reading search results, catalog listings, or scraping full vacancy descriptions. |
 | **3. Fast Classifier** | `better-axi classify --criteria "..."` | High-throughput semantic filtering (`Fit` / `50-50` / `Bad`) using fast decision models. | Screening 50+ items at low cost before deep investigation. |
 | **4. Raw Interactive AXI** | `npx -y chrome-devtools-axi <action>` | Direct single-action execution: `open`, `snapshot`, `click <uid>`, `fill <uid>`, `press`. | Final single-click actions (e.g. clicking "Add to Cart" or "Apply") or human inspection. |
@@ -58,3 +58,8 @@ export CHROME_DEVTOOLS_AXI_PORT=9336
 export CHROME_DEVTOOLS_AXI_BROWSER_URL="http://127.0.0.1:9336"
 export CHROME_DEVTOOLS_AXI_SESSION="ozon"
 ```
+
+
+## Decisions provider
+
+Start Personal AI Gateway separately, configure a Decisions alias named 'decision', then set PAG_API_KEY (optionally PAG_BASE_URL and PAG_DECISION_MODEL). Better-AXI delegates provider credentials and fallback to PAG. See docs/pag-integration.md.

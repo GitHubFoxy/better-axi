@@ -1,9 +1,9 @@
 /**
- * Fast Jev Classifier for web navigation, filtering, and job candidate match.
+ * PAG-backed Classifier for web navigation, filtering, and job candidate match.
  * Evaluates titles/snippets into Fit / 50-50 / Bad.
  */
 
-import { requestDecision, validateChoice } from './decision_client.mjs';
+import { requestDecision, validateChoice } from '../pag/client.mjs';
 
 export const CLASSIFICATION_CHOICES = {
   FIT: 'Fit: Strong match with criteria, key requirements and skills aligned.',

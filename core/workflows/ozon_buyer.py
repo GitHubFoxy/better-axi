@@ -1,5 +1,5 @@
 """
-Ozon Buying Workflow uniting AXI, Jev, and Crawl4AI.
+Ozon Buying Workflow uniting AXI, PAG-backed Decisions, and Crawl4AI.
 1. Nav: Search "Туалетная бумага 3 слоя", sort by rating.
 2. Extract: Crawl4AI extracts cards across page 1 and page 2.
 3. Unit-economics Evaluation: Exclude forbidden vendors (Yandex Fabrika, Tuvio),

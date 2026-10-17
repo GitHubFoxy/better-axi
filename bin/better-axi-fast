@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Fast Autonomous CLI for better-axi (Jev Loop + Crawl4AI Extraction)
+ * Fast Autonomous CLI for better-axi (PAG-backed Navigation + Crawl4AI Extraction)
  */
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
