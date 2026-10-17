@@ -7,8 +7,8 @@ Browser navigation, content extraction and fast classification over Chrome DevTo
 ## Commands
 
 - nav: autonomous CDP navigation via PAG Decisions.
-- extract active: fetch the current browser page using Crawl4AI.
-- extract batch: scrape a list of URLs concurrently.
+- extract active: read exactly one CDP page; pass `--url` when several page targets are open.
+- extract batch: scrape a URL list concurrently through Crawl4AI in the connected browser.
 - classify: categorize input items as Fit / 50-50 / Bad with PAG.
 
 ~~~sh
@@ -35,9 +35,16 @@ export PAG_BASE_URL=http://127.0.0.1:4000/v1
 export PAG_API_KEY=pag_your_local_gateway_key
 export PAG_DECISION_MODEL=decision
 
-export CHROME_DEVTOOLS_AXI_PORT=9335
-export CHROME_DEVTOOLS_AXI_BROWSER_URL=http://127.0.0.1:9335
 export CHROME_DEVTOOLS_AXI_SESSION=career
+
+# Chrome DevTools endpoints — two different things, do not point them at each other:
+# 1. AXI bridge port: the chrome-devtools-axi process's own channel. Career uses
+#    bridge 9445 paired with CDP 9335. Never set this to the CDP port.
+export CHROME_DEVTOOLS_AXI_PORT=9445
+# 2. CDP endpoint of the Chrome you want to reuse (--remote-debugging-port).
+#    Both navigation decisions and `extract` crawling attach to this browser.
+#    Without it, `extract` fails fast instead of guessing a port.
+export CHROME_DEVTOOLS_AXI_BROWSER_URL=http://127.0.0.1:9335
 ~~~
 
 PAG_BASE_URL and PAG_DECISION_MODEL are optional (defaults above). PAG_API_KEY is required for real Decisions requests. A ChatGPT Plus subscription does not itself grant native Decisions API access; use a compatible PAG Decisions account. Remote PAG endpoints must use HTTPS.

@@ -37,7 +37,7 @@ export function detectSpecialConditions(text) {
 
 export function evaluateDeepMatch(vacancy, candidate) {
   const text = `${vacancy.title} ${vacancy.description || ''} ${vacancy.snippet || ''} ${(vacancy.skills || []).join(' ')}`.toLowerCase();
-  const candidateSkills = (candidate.skills || ['Python', 'Go', 'FastAPI', 'PostgreSQL', 'Docker', 'Redis', 'Kafka', 'Asyncio']).map(s => s.toLowerCase());
+  const candidateSkills = (candidate?.skills || []).map(s => s.toLowerCase());
 
   let matchedSkills = 0;
   for (const skill of candidateSkills) {
@@ -76,18 +76,22 @@ export function evaluateDeepMatch(vacancy, candidate) {
 }
 
 export function draftCoverLetter(vacancy, candidate, specialCondition = null) {
+  if (!candidate?.name || !candidate?.experienceSummary) {
+    throw new Error('Candidate name and experienceSummary are required to draft a cover letter.');
+  }
+
   const cond = specialCondition || detectSpecialConditions(vacancy.description || vacancy.fit_markdown || '');
   const prefixPart = cond.hasCondition && cond.prefix ? `${cond.prefix}, ` : '';
 
-  const candidateName = candidate.name || 'Александр';
-  const candidateExperience = candidate.experienceSummary || '2 года коммерческой разработки на Python и Go (FastAPI, PostgreSQL, Redis, Docker)';
+  const candidateName = candidate.name;
+  const candidateExperience = candidate.experienceSummary;
 
   const letter = [
     `${prefixPart}Добрый день!`,
     '',
     `Меня зовут ${candidateName}, меня очень заинтересовала вакансия «${vacancy.title}» в компании ${vacancy.employer || 'вашей компании'}.`,
     '',
-    `Мой профиль и опыт: ${candidateExperience}. Имею опыт проектирования масштабируемых API, работы с реляционными базами данных, оптимизации запросов и контейнеризации сервисов.`,
+    `Мой профиль и опыт: ${candidateExperience}.`,
     '',
     'Буду рад обсудить задачи команды и детали сотрудничества на интервью.',
     '',

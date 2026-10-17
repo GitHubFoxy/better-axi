@@ -9,6 +9,7 @@ import { spawn } from 'node:child_process';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = join(__dirname, '..');
 const runnerPath = join(rootDir, 'core/workflows/runner.mjs');
+const browserCliPath = join(__dirname, 'better-axi');
 
 const args = process.argv.slice(2);
 const command = args[0];
@@ -47,8 +48,9 @@ if (!mappedCommand) {
   process.exit(1);
 }
 
-const runnerArgs = [mappedCommand, ...args.slice(1)];
-const proc = spawn('node', [runnerPath, ...runnerArgs], {
+const entryPath = command === 'extract' ? browserCliPath : runnerPath;
+const runnerArgs = command === 'extract' ? args : [mappedCommand, ...args.slice(1)];
+const proc = spawn('node', [entryPath, ...runnerArgs], {
   cwd: rootDir,
   stdio: 'inherit',
   env: process.env,

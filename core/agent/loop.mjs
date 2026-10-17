@@ -28,6 +28,22 @@ export function parseSnapshotElements(snapshot) {
   });
 }
 
+const BLOCKED_MARKERS = /access denied|доступ запрещен|verify you are human|cloudflare|datadome|smartcaptcha|security check|just a moment|attention required|checking your browser/i;
+
+/**
+ * Decide whether the snapshot shows a real anti-bot challenge.
+ * A blocker names itself in the page title (the RootWebArea snapshot line),
+ * while body text such as "powered by Cloudflare" on a normal page must not
+ * force a handoff. Anywhere else it only counts when the page has no
+ * interactive elements at all, i.e. nothing this loop could act on.
+ */
+export function looksBlocked(snapshot) {
+  if (!snapshot) return false;
+  const head = snapshot.split('\n').slice(0, 4).join('\n');
+  if (BLOCKED_MARKERS.test(head)) return true;
+  return !/\buid=\S+/.test(snapshot) && BLOCKED_MARKERS.test(snapshot);
+}
+
 export function generateActions(snapshot, task) {
   const observed = {};
   const elements = parseSnapshotElements(snapshot);
@@ -111,7 +127,7 @@ export async function runNavigationLoop(page, task, options = {}) {
     }
 
     snapshot = await page.snapshot();
-    if (/access denied|доступ запрещен|verify you are human|cloudflare|datadome|smartcaptcha|security check|just a moment/i.test(snapshot)) {
+    if (looksBlocked(snapshot)) {
       status = 'handoff';
       break;
     }

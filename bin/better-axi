@@ -58,17 +58,25 @@ if (!subcommand || ['--help', '-h', 'help'].includes(subcommand)) {
 }
 
 // Global environment configuration
-const port = process.env.CHROME_DEVTOOLS_AXI_PORT || '9335';
-const browserUrl = process.env.CHROME_DEVTOOLS_AXI_BROWSER_URL || `http://127.0.0.1:${port}`;
+// CHROME_DEVTOOLS_AXI_PORT is the chrome-devtools-axi bridge server port (AXI
+// derives one per session when unset). CHROME_DEVTOOLS_AXI_BROWSER_URL is the
+// CDP endpoint of an already running Chrome. They are different endpoints, so
+// neither may default to the other (https://github.com/GitHubFoxy/better-axi).
+const bridgePort = process.env.CHROME_DEVTOOLS_AXI_PORT;
+const browserUrl = process.env.CHROME_DEVTOOLS_AXI_BROWSER_URL;
 const session = process.env.CHROME_DEVTOOLS_AXI_SESSION || 'default';
 
-function callAxi(command, commandArgs = [], options = {}) {
-  const env = {
+function axiEnv() {
+  return {
     ...process.env,
-    CHROME_DEVTOOLS_AXI_PORT: port,
-    CHROME_DEVTOOLS_AXI_BROWSER_URL: browserUrl,
+    ...(bridgePort ? { CHROME_DEVTOOLS_AXI_PORT: bridgePort } : {}),
+    ...(browserUrl ? { CHROME_DEVTOOLS_AXI_BROWSER_URL: browserUrl } : {}),
     CHROME_DEVTOOLS_AXI_SESSION: session,
   };
+}
+
+function callAxi(command, commandArgs = [], options = {}) {
+  const env = axiEnv();
   try {
     return execFileSync('npx', ['-y', 'chrome-devtools-axi', command, ...commandArgs], {
       env,
@@ -137,6 +145,9 @@ async function handleNav(navArgs) {
     async eval(expr) {
       return callAxi('eval', [String(expr)]);
     },
+    async back() {
+      return callAxi('back');
+    },
   };
 
   try {
@@ -163,12 +174,7 @@ async function handleExtract(extractArgs) {
       else if (extractArgs[i] === '--url') expectedUrl = extractArgs[++i];
     }
 
-    const env = {
-      ...process.env,
-      CHROME_DEVTOOLS_AXI_PORT: port,
-      CHROME_DEVTOOLS_AXI_BROWSER_URL: browserUrl,
-      CHROME_DEVTOOLS_AXI_SESSION: session,
-    };
+    const env = axiEnv();
 
     const proc = spawn(
       pythonBin,
@@ -184,12 +190,7 @@ async function handleExtract(extractArgs) {
       process.exit(0);
     }
 
-    const env = {
-      ...process.env,
-      CHROME_DEVTOOLS_AXI_PORT: port,
-      CHROME_DEVTOOLS_AXI_BROWSER_URL: browserUrl,
-      CHROME_DEVTOOLS_AXI_SESSION: session,
-    };
+    const env = axiEnv();
 
     const proc = spawn(
       pythonBin,

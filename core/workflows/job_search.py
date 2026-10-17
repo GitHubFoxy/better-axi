@@ -112,7 +112,7 @@ class JobSearchWorkflow:
     def evaluate_deep(self, vacancy: HHVacancyRecord, candidate: Dict[str, Any]) -> Dict[str, Any]:
         """Deep evaluation of vacancy details against candidate profile."""
         full_text = f"{vacancy.title} {vacancy.description or ''} {vacancy.snippet or ''} {' '.join(vacancy.skills)}".lower()
-        skills = [s.lower() for s in candidate.get("skills", ["Python", "FastAPI", "PostgreSQL", "Docker", "Redis"])]
+        skills = [s.lower() for s in candidate.get("skills", [])]
 
         matches = sum(1 for s in skills if s in full_text)
         score = min(100, int((matches / max(1, len(skills))) * 70) + 30)
@@ -121,11 +121,12 @@ class JobSearchWorkflow:
         
         # Draft tailored cover letter
         prefix = f"{special['prefix']}, " if special["has_condition"] and special["prefix"] else ""
-        name = candidate.get("name", "Александр")
+        name = str(candidate.get("name") or "").strip()
+        intro = f"Меня зовут {name}. " if name else ""
         cover_letter = (
             f"{prefix}Добрый день!\n\n"
-            f"Меня зовут {name}. Меня очень заинтересовала вакансия «{vacancy.title}» в компании {vacancy.employer or 'вашей компании'}.\n\n"
-            f"Мой стек и опыт: {candidate.get('summary', '2 года разработки backend-сервисов на Python/Go, PostgreSQL, Docker')}. "
+            f"{intro}Меня очень заинтересовала вакансия «{vacancy.title}» в компании {vacancy.employer or 'вашей компании'}.\n\n"
+            f"Мой стек и опыт: {str(candidate.get('summary') or '').strip()}. "
             f"Готов оперативно выполнить тестовое задание или обсудить детали на интервью.\n\n"
             f"С уважением,\n{name}"
         )
@@ -149,11 +150,30 @@ class JobSearchWorkflow:
         auto_apply: bool = False,
     ) -> Dict[str, Any]:
         """Execute the job search pipeline."""
-        candidate = candidate_profile or {
-            "name": "Александр",
-            "skills": ["Python", "Go", "FastAPI", "PostgreSQL", "Docker", "Redis"],
-            "summary": "2 года разработки высоконагруженных бэкенд-сервисов",
-        }
+        # Personal facts must be supplied explicitly; the workflow never ships a
+        # default candidate profile, otherwise fabricated data can end up in a
+        # real application.
+        if candidate_profile is None:
+            raise ValueError(
+                "candidate_profile is required with non-empty 'name', 'skills' "
+                "and 'summary'. JobSearchWorkflow does not invent personal data."
+            )
+        missing = [
+            key for key, value in (
+                ("name", candidate_profile.get("name")),
+                ("summary", candidate_profile.get("summary")),
+            ) if not str(value or "").strip()
+        ]
+        skills = candidate_profile.get("skills")
+        if not isinstance(skills, list) or not skills or not all(
+            isinstance(s, str) and s.strip() for s in skills
+        ):
+            missing.append("skills")
+        if missing:
+            raise ValueError(
+                "candidate_profile has empty or missing fields: " + ", ".join(missing)
+            )
+        candidate = candidate_profile
 
         # Step 1: Nav
         search_url = self.build_search_url(query, experience)
@@ -232,9 +252,20 @@ class JobSearchWorkflow:
 
 
 if __name__ == '__main__':
+    import os
     import sys
+
+    profile_path = sys.argv[3] if len(sys.argv) > 3 else os.environ.get("JOB_SEARCH_PROFILE")
+    if not profile_path:
+        print(json.dumps({
+            "error": "Candidate profile required: pass a candidate JSON file path "
+                     "as the third argument or set JOB_SEARCH_PROFILE. No default "
+                     "profile is shipped."
+        }), file=sys.stderr)
+        sys.exit(1)
+    candidate_profile = json.loads(Path(profile_path).read_text(encoding="utf-8"))
     workflow = JobSearchWorkflow()
     query = sys.argv[1] if len(sys.argv) > 1 else 'backend'
     exp = sys.argv[2] if len(sys.argv) > 2 else '1-3 years'
-    res = asyncio.run(workflow.run(query=query, experience=exp))
+    res = asyncio.run(workflow.run(query=query, experience=exp, candidate_profile=candidate_profile))
     print(json.dumps(res, ensure_ascii=False, indent=2))

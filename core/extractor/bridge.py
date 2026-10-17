@@ -49,29 +49,45 @@ class Crawl4AIBridge:
     """Bridge for Crawl4AI connecting to Helium/Chrome over shared CDP."""
 
     def __init__(self, cdp_url: Optional[str] = None, port: Optional[int] = None):
+        # CHROME_DEVTOOLS_AXI_BROWSER_URL is Chrome's own DevTools endpoint (CDP).
+        # CHROME_DEVTOOLS_AXI_PORT is the chrome-devtools-axi *bridge* server port,
+        # a different endpoint that does not serve /json — it must never be used
+        # as a CDP fallback.
         if not cdp_url:
-            port = port or int(os.environ.get("CHROME_DEVTOOLS_AXI_PORT", 9335))
-            cdp_url = os.environ.get("CHROME_DEVTOOLS_AXI_BROWSER_URL", f"http://127.0.0.1:{port}")
-        self.cdp_url = cdp_url.rstrip("/")
+            cdp_url = os.environ.get("CHROME_DEVTOOLS_AXI_BROWSER_URL")
+        self.cdp_url = cdp_url.rstrip("/") if cdp_url else None
         self.port = port
+
+    def _require_cdp_url(self) -> str:
+        """Resolve the CDP endpoint, failing closed when it was never configured."""
+        if self.cdp_url:
+            return self.cdp_url
+        if self.port:
+            return f"http://127.0.0.1:{self.port}"
+        raise RuntimeError(
+            "No CDP endpoint configured for the extractor. Set "
+            "CHROME_DEVTOOLS_AXI_BROWSER_URL to Chrome's remote-debugging URL "
+            "(e.g. http://127.0.0.1:9222). CHROME_DEVTOOLS_AXI_PORT is the "
+            "chrome-devtools-axi bridge port and cannot be crawled over."
+        )
 
     def _get_browser_config(self) -> Any:
         if not CRAWL4AI_AVAILABLE:
             return None
         return BrowserConfig(
             browser_mode="custom",
-            cdp_url=self.cdp_url,
+            cdp_url=self._require_cdp_url(),
             headless=False,
             verbose=False,
         )
 
     async def get_active_tab_dom(self, expected_url: Optional[str] = None) -> Dict[str, Any]:
         """Fetch one selected page by exact URL, without navigating."""
-        req = urllib.request.urlopen(f"{self.cdp_url}/json", timeout=2.0)
+        req = urllib.request.urlopen(f"{self._require_cdp_url()}/json", timeout=2.0)
         tabs = json.loads(req.read().decode("utf-8"))
         page_tabs = [t for t in tabs if t.get("type") == "page" and not t.get("url", "").startswith("devtools://")]
         if not page_tabs:
-            raise RuntimeError(f"No active page tabs found on CDP at {self.cdp_url}")
+            raise RuntimeError(f"No active page tabs found on CDP at {self._require_cdp_url()}")
 
         tab = select_page_target(page_tabs, expected_url)
         ws_url = tab.get("webSocketDebuggerUrl")
