@@ -1,7 +1,7 @@
 [project]
 name = "better-axi"
 version = "0.1.0"
-description = "High-throughput extractor bridge and workflows uniting AXI, Jev, and Crawl4AI"
+description = "High-throughput extractor bridge and workflows uniting AXI, PAG Decisions, and Crawl4AI"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
